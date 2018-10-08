@@ -196,6 +196,10 @@ func backupFile(srcAbsPath string, destName string, destDir string) error {
 
 	log.Printf("successfully backed up %s to %s", srcAbsPath, destAbsPath)
 
+	if err := removeDuplicate(destAbsPath); err != nil {
+		return fmt.Errorf("unable to check for %s duplicates, error: %s", destAbsPath, err)
+	}
+
 	if err := os.Remove(srcAbsPath); err != nil {
 		return fmt.Errorf("unable to remove source file %s after backup, error: %s", srcAbsPath, err)
 	}
@@ -203,14 +207,52 @@ func backupFile(srcAbsPath string, destName string, destDir string) error {
 	return nil
 }
 
+func removeDuplicate(filePath string) error {
+	if isHeicFile(filePath) {
+		duplicateName := swapExtension(filePath, ".jpg")
+		_, err := os.Stat(duplicateName)
+		if os.IsNotExist(err) {
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+
+		if err := os.Remove(duplicateName); err != nil {
+			return err
+		}
+
+		log.Printf("removed duplicate JPEG %s file for %s HEIC file", duplicateName, filePath)
+	}
+
+	if isJpegFile(filePath) {
+		duplicateName := swapExtension(filePath, ".heic")
+		_, err := os.Stat(duplicateName)
+		if os.IsNotExist(err) {
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+
+		if err := os.Remove(filePath); err != nil {
+			return err
+		}
+
+		log.Printf("removed duplicate JPEG %s file for %s HEIC file", filePath, duplicateName)
+	}
+
+	return nil
+}
+
 func (r routine) hasDuplicateHeic(srcAbsPath string) (bool, error) {
-	srcExt := strings.ToLower(filepath.Ext(srcAbsPath))
-	if srcExt != ".jpg" {
+	if !isJpegFile(srcAbsPath) {
 		return false, nil
 	}
 
-	srcAbsPathLengthWithoutExtension := len(srcAbsPath) - 4
-	srcAbsPathHeic := srcAbsPath[:srcAbsPathLengthWithoutExtension] + ".heic"
+	srcAbsPathHeic := swapExtension(srcAbsPath, ".heic")
 	_, err := os.Stat(srcAbsPathHeic)
 	if os.IsNotExist(err) {
 		return false, nil
@@ -236,6 +278,29 @@ func (r routine) hasDuplicateHeic(srcAbsPath string) (bool, error) {
 	return true, nil
 }
 
+func isJpegFile(path string) bool {
+	return hasExtension(path, ".jpg")
+}
+
+func isHeicFile(path string) bool {
+	return hasExtension(path, ".heic")
+}
+
+func hasExtension(fileName string, extension string) bool {
+	return strings.ToLower(filepath.Ext(fileName)) == strings.ToLower(extension)
+}
+
+func swapExtension(path string, newExtension string) string {
+	return removeExtension(path) + newExtension
+}
+
+func removeExtension(path string) string {
+	oldExtensionLength := len(filepath.Ext(path))
+	pathLengthWitoutExtension := len(path) - oldExtensionLength
+
+	return path[:pathLengthWitoutExtension]
+}
+
 func copyFile(srcAbsPath string, destAbsPath string) error {
 	srcFile, err := os.Open(srcAbsPath)
 	if err != nil {
@@ -253,8 +318,7 @@ func copyFile(srcAbsPath string, destAbsPath string) error {
 		return fmt.Errorf("unable to copy %s to %s, error: %s", srcAbsPath, destAbsPath, err)
 	}
 
-	err = destFile.Sync()
-	if err != nil {
+	if err := destFile.Sync(); err != nil {
 		return fmt.Errorf("unable to synchronize destination file %s to disk, error: %s", destAbsPath, err)
 	}
 
