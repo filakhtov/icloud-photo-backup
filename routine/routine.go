@@ -137,6 +137,12 @@ func (r routine) processFiles(files []os.FileInfo) (int64, int64) {
 }
 
 func (r routine) processFile(fileName string) error {
+	if isBlacklisted(fileName) {
+		log.Printf("not touching blacklisted file %s", fileName)
+
+		return nil
+	}
+
 	log.Printf("processing file: %s\n", fileName)
 
 	filePath := filepath.Join(r.configuration.Source(), fileName)
@@ -165,6 +171,16 @@ func (r routine) processFile(fileName string) error {
 	log.Printf("processing file is finished: %s\n", fileName)
 
 	return nil
+}
+
+func isBlacklisted(fileName string) bool {
+	switch strings.ToLower(fileName) {
+	case
+		"thumbs.db",
+		"desktop.ini":
+		return true
+	}
+	return false
 }
 
 func backupFile(srcAbsPath string, destName string, destDir string) error {
