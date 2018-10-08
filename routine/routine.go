@@ -283,13 +283,6 @@ func fileCrc32(fileName string) (uint32, error) {
 }
 
 func (r routine) shouldRun() bool {
-	if err := r.lockFile.Validate(); err != nil {
-		log.Println(err)
-		notification.Error("Lock file error", err.Error())
-
-		return false
-	}
-
 	if !r.signalHandler.ShouldContinue() {
 		log.Println("OS interrupt received, terminating")
 
