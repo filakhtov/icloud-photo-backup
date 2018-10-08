@@ -12,13 +12,12 @@ type Configuration interface {
 	LockFile() string
 	PollingInterval() time.Duration
 	Source() string
-	Destinations() []string
+	Destination() string
 }
 
 type configurationImpl struct {
-	logDir, lockFile, source string
-	destination              []string
-	pollingInterval          time.Duration
+	logDir, lockFile, source, destination string
+	pollingInterval                       time.Duration
 }
 
 func (c configurationImpl) LogDir() string {
@@ -37,7 +36,7 @@ func (c configurationImpl) Source() string {
 	return c.source
 }
 
-func (c configurationImpl) Destinations() []string {
+func (c configurationImpl) Destination() string {
 	return c.destination
 }
 
@@ -72,9 +71,8 @@ func ParseConfiguration(configPath string) (config Configuration, err error) {
 }
 
 type parsedConfiguration struct {
-	LogDir, LockFile, Source string
-	Destination              []string
-	PollingInterval          duration
+	LogDir, LockFile, Source, Destination string
+	PollingInterval                       duration
 }
 
 type duration struct {

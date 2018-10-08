@@ -156,7 +156,7 @@ func (r routine) processFile(fileName string) error {
 
 	log.Printf("Destination name for %s is %s\n", fileName, destName)
 
-	if err := backupFile(filePathAbs, destName, r.configuration.Destinations()); err != nil {
+	if err := backupFile(filePathAbs, destName, r.configuration.Destination()); err != nil {
 		log.Println(err)
 
 		return err
@@ -167,20 +167,18 @@ func (r routine) processFile(fileName string) error {
 	return nil
 }
 
-func backupFile(srcAbsPath string, destName string, destinations []string) error {
-	for _, destDir := range destinations {
-		destPath := filepath.Join(destDir, destName)
-		destAbsPath, err := filepath.Abs(destPath)
-		if err != nil {
-			return fmt.Errorf("unable to get destination file absolute path for %s, error: %s", destName, err)
-		}
-
-		if err := copyFile(srcAbsPath, destAbsPath); err != nil {
-			return err
-		}
-
-		log.Printf("successfully backed up %s to %s", srcAbsPath, destAbsPath)
+func backupFile(srcAbsPath string, destName string, destDir string) error {
+	destPath := filepath.Join(destDir, destName)
+	destAbsPath, err := filepath.Abs(destPath)
+	if err != nil {
+		return fmt.Errorf("unable to get destination file absolute path for %s, error: %s", destName, err)
 	}
+
+	if err := copyFile(srcAbsPath, destAbsPath); err != nil {
+		return err
+	}
+
+	log.Printf("successfully backed up %s to %s", srcAbsPath, destAbsPath)
 
 	if err := os.Remove(srcAbsPath); err != nil {
 		return fmt.Errorf("unable to remove source file %s after backup, error: %s", srcAbsPath, err)
