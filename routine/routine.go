@@ -1,6 +1,7 @@
 package routine
 
 import (
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -27,6 +28,8 @@ type routine struct {
 	signalHandler signal_handler.SignalHandler
 	lockFile      lockfile.LockFile
 }
+
+var ignoredFileError = errors.New("not touching blacklisted file")
 
 func New(cfg config.Configuration, sh signal_handler.SignalHandler, lf lockfile.LockFile) Routine {
 	return routine{configuration: cfg, signalHandler: sh, lockFile: lf}
@@ -126,7 +129,12 @@ func (r routine) processFiles(files []os.FileInfo) (int64, int64) {
 			return successes, failures
 		}
 
-		if r.processFile(file.Name()) == nil {
+		err := r.processFile(file.Name())
+		if err == ignoredFileError {
+			continue
+		}
+
+		if err == nil {
 			successes++
 		} else {
 			failures++
@@ -140,7 +148,7 @@ func (r routine) processFile(fileName string) error {
 	if isBlacklisted(fileName) {
 		log.Printf("not touching blacklisted file %s", fileName)
 
-		return nil
+		return ignoredFileError
 	}
 
 	log.Printf("processing file: %s\n", fileName)
