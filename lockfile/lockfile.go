@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
-	"sync/atomic"
 )
 
 type LockFile interface {
@@ -20,22 +19,17 @@ func New(lockFilePath string) (lf LockFile, err error) {
 		return
 	}
 
-	lf = lockFile{filePath: lockFilePath, isTampered: new(uint32), fileFd: fd}
+	lf = lockFile{filePath: lockFilePath, fileFd: fd}
 
 	return
 }
 
 type lockFile struct {
-	filePath   string
-	fileFd     *os.File
-	isTampered *uint32
+	filePath string
+	fileFd   *os.File
 }
 
 func (lf lockFile) Destroy() error {
-	if atomic.LoadUint32(lf.isTampered) == 1 {
-		return fmt.Errorf("not removing lock file %s because it was externally tampered with", lf.filePath)
-	}
-
 	if err := Unlock(lf.fileFd); err != nil {
 		return fmt.Errorf("unable to unlock lock file %s, error: %s", lf.filePath, err)
 	}
