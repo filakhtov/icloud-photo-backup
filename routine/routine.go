@@ -334,6 +334,11 @@ func copyFile(srcAbsPath string, destAbsPath string) error {
 }
 
 func (r routine) getDestinationFileName(filePathAbs string) (string, error) {
+	sum, err := fileCrc32(filePathAbs)
+	if err != nil {
+		return "", fmt.Errorf("unable to compute file has for %s, error: %s", filePathAbs, err)
+	}
+
 	date, err := exif.GetExifDate(filePathAbs)
 	if err != nil {
 		log.Printf("unable to obtain EXIF date from %s file, error: %s", filePathAbs, err)
@@ -344,11 +349,6 @@ func (r routine) getDestinationFileName(filePathAbs string) (string, error) {
 		}
 
 		date = finfo.ModTime()
-	}
-
-	sum, err := fileCrc32(filePathAbs)
-	if err != nil {
-		return "", fmt.Errorf("unable to compute file has for %s, error: %s", filePathAbs, err)
 	}
 
 	return fmt.Sprintf("%04d%02d%02d_%02d%02d%02d-%x%s", date.Year(), date.Month(), date.Day(), date.Hour(),
@@ -364,7 +364,7 @@ func fileCrc32(fileName string) (uint32, error) {
 
 	hash := crc32.NewIEEE()
 	if _, err := io.Copy(hash, f); err != nil {
-		log.Fatal(err)
+		return 0, err
 	}
 
 	return hash.Sum32(), nil

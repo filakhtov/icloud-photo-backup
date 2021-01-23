@@ -20,12 +20,7 @@ func GetExifDate(filename string) (time.Time, error) {
 		return time.Now(), fmt.Errorf("%s (%s)", errOut.String(), err)
 	}
 
-	date, err := parseExifDate(out.String())
-	if err != nil {
-		return time.Now(), err
-	}
-
-	return date, nil
+	return parseExifDate(out.String())
 }
 
 func parseExifDate(dateString string) (time.Time, error) {
