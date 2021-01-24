@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -34,4 +35,19 @@ func parseExifDate(dateString string) (time.Time, error) {
 	}
 
 	return date, nil
+}
+
+func GetExifExtension(filename string) (string, error) {
+	var out, errOut bytes.Buffer
+
+	cmd := exec.Command("exiftool.exe", "-T", "-FileTypeExtension", filename)
+	cmd.Stdout = &out
+	cmd.Stderr = &errOut
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%s (%s)", errOut.String(), err)
+	}
+
+	return strings.ToLower(strings.TrimSpace(out.String())), nil
 }

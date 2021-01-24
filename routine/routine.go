@@ -29,7 +29,7 @@ type routine struct {
 	lockFile      lockfile.LockFile
 }
 
-var ignoredFileError = errors.New("not touching blacklisted file")
+var errIgnoredFile = errors.New("not touching blacklisted file")
 
 func New(cfg config.Configuration, sh signal_handler.SignalHandler, lf lockfile.LockFile) Routine {
 	return routine{configuration: cfg, signalHandler: sh, lockFile: lf}
@@ -79,46 +79,7 @@ func (r routine) processDirectory() (int64, int64) {
 
 	log.Printf("Opened source directory: %s\n", r.configuration.Source())
 
-	return r.processFiles(r.removeDuplicates(files))
-}
-
-func (r routine) removeDuplicates(files []os.FileInfo) []os.FileInfo {
-	var unique []os.FileInfo
-
-	for _, file := range files {
-		if !r.shouldRun() {
-			return []os.FileInfo{}
-		}
-
-		filePath := filepath.Join(r.configuration.Source(), file.Name())
-		filePathAbs, err := filepath.Abs(filePath)
-		if err != nil {
-			log.Printf("unable to get absolute file path for %s, error: %s\n", file.Name(), err)
-
-			return []os.FileInfo{}
-		}
-
-		hasDuplicate, err := r.hasDuplicateHeic(filePathAbs)
-		if err != nil {
-			log.Printf("unable to check if %s JPEG has a HEIC pair, error: %s\n", file.Name(), err)
-
-			return []os.FileInfo{}
-		}
-
-		if hasDuplicate {
-			if err := os.Remove(filePathAbs); err != nil {
-				log.Printf("unable to remove JPEG duplicate of HEIC %s, error: %s\n", file.Name(), err)
-
-				return []os.FileInfo{}
-			}
-
-			log.Printf("found duplicate JPEG/HEIC pair and removed JPEG: %s\n", file.Name())
-		} else {
-			unique = append(unique, file)
-		}
-	}
-
-	return unique
+	return r.processFiles(files)
 }
 
 func (r routine) processFiles(files []os.FileInfo) (int64, int64) {
@@ -130,7 +91,7 @@ func (r routine) processFiles(files []os.FileInfo) (int64, int64) {
 		}
 
 		err := r.processFile(file.Name())
-		if err == ignoredFileError {
+		if err == errIgnoredFile {
 			continue
 		}
 
@@ -148,7 +109,7 @@ func (r routine) processFile(fileName string) error {
 	if isBlacklisted(fileName) {
 		log.Printf("not touching blacklisted file %s", fileName)
 
-		return ignoredFileError
+		return errIgnoredFile
 	}
 
 	log.Printf("processing file: %s\n", fileName)
@@ -204,86 +165,11 @@ func backupFile(srcAbsPath string, destName string, destDir string) error {
 
 	log.Printf("successfully backed up %s to %s", srcAbsPath, destAbsPath)
 
-	if err := removeDuplicate(destAbsPath); err != nil {
-		return fmt.Errorf("unable to check for %s duplicates, error: %s", destAbsPath, err)
-	}
-
 	if err := os.Remove(srcAbsPath); err != nil {
 		return fmt.Errorf("unable to remove source file %s after backup, error: %s", srcAbsPath, err)
 	}
 
 	return nil
-}
-
-func removeDuplicate(filePath string) error {
-	if isHeicFile(filePath) {
-		duplicateName := swapExtension(filePath, ".jpg")
-		_, err := os.Stat(duplicateName)
-		if os.IsNotExist(err) {
-			return nil
-		}
-
-		if err != nil {
-			return err
-		}
-
-		if err := os.Remove(duplicateName); err != nil {
-			return err
-		}
-
-		log.Printf("removed duplicate JPEG %s file for %s HEIC file", duplicateName, filePath)
-	}
-
-	if isJpegFile(filePath) {
-		duplicateName := swapExtension(filePath, ".heic")
-		_, err := os.Stat(duplicateName)
-		if os.IsNotExist(err) {
-			return nil
-		}
-
-		if err != nil {
-			return err
-		}
-
-		if err := os.Remove(filePath); err != nil {
-			return err
-		}
-
-		log.Printf("removed duplicate JPEG %s file for %s HEIC file", filePath, duplicateName)
-	}
-
-	return nil
-}
-
-func (r routine) hasDuplicateHeic(srcAbsPath string) (bool, error) {
-	if !isJpegFile(srcAbsPath) {
-		return false, nil
-	}
-
-	srcAbsPathHeic := swapExtension(srcAbsPath, ".heic")
-	_, err := os.Stat(srcAbsPathHeic)
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-
-	dateJpg, err := exif.GetExifDate(srcAbsPath)
-	if err != nil {
-		return false, fmt.Errorf("%s - %s", srcAbsPath, err)
-	}
-
-	dateHeic, err := exif.GetExifDate(srcAbsPathHeic)
-	if err != nil {
-		return false, fmt.Errorf("%s - %s", srcAbsPathHeic, err)
-	}
-
-	if dateHeic != dateJpg {
-		return false, nil
-	}
-
-	return true, nil
 }
 
 func isJpegFile(path string) bool {
@@ -345,14 +231,23 @@ func (r routine) getDestinationFileName(filePathAbs string) (string, error) {
 
 		finfo, err := os.Stat(filePathAbs)
 		if err != nil {
-			return "", fmt.Errorf("unable to obtain EXIF or modification date for %s, error: %s", filePathAbs, err)
+			return "", fmt.Errorf(
+				"unable to obtain EXIF or modification date from %s file, error: %s",
+				filePathAbs,
+				err,
+			)
 		}
 
 		date = finfo.ModTime()
 	}
 
-	return fmt.Sprintf("%04d%02d%02d_%02d%02d%02d-%x%s", date.Year(), date.Month(), date.Day(), date.Hour(),
-		date.Minute(), date.Second(), sum, filepath.Ext(filePathAbs)), nil
+	extension, err := exif.GetExifExtension(filePathAbs)
+	if err != nil {
+		return "", fmt.Errorf("Unable to obtain file extension from %s file, error: %s", filePathAbs, err)
+	}
+
+	return fmt.Sprintf("%04d%02d%02d_%02d%02d%02d-%x.%s", date.Year(), date.Month(), date.Day(), date.Hour(),
+		date.Minute(), date.Second(), sum, extension), nil
 }
 
 func fileCrc32(fileName string) (uint32, error) {
