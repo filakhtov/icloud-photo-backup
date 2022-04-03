@@ -47,8 +47,8 @@ func Error(title string, text string) error {
 }
 
 func send(n notification) error {
-	if len(n.BalloonTipText) > 61 {
-		n.BalloonTipText = n.BalloonTipText[:61] + "..."
+	if len(n.BalloonTipText) > 60 {
+		n.BalloonTipText = n.BalloonTipText[:60] + "..."
 	}
 
 	tmpl, err := template.New("").Parse(script)
